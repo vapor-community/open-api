@@ -21,7 +21,7 @@ public struct OpenApiService {
     }
 }
 
-public struct OpenAPIInfo: Content {
+public struct OpenAPIInfo: Encodable {
     public let title: String
     public let description: String?
     public let version: String
@@ -33,24 +33,24 @@ public struct OpenAPIInfo: Content {
     public let license: OpenAPILicense?
 }
 
-public struct OpenAPIContact: Content {
+public struct OpenAPIContact: Encodable {
     public let name: String?
     public let url: String?
     public let email: String?
 }
 
-public struct OpenAPILicense: Content {
+public struct OpenAPILicense: Encodable {
     public let name: String
     public let url: URL
 }
 
-public struct OpenAPIServer: Content {
+public struct OpenAPIServer: Encodable {
     public let url: String
     public let description: String?
     public let variables: [String: OpenAPIServerVariable]
 }
 
-public struct OpenAPIServerVariable: Content {
+public struct OpenAPIServerVariable: Encodable {
     public let `enum`: [String]?
     public let `default`: String
     public let description: String?
@@ -97,7 +97,7 @@ public struct OpenAPIKeyString: RegexableString {
     public var value: String
 }
 
-public struct OpenAPIComponents: Content {
+public struct OpenAPIComponents: Encodable {
     public let schemas: [OpenAPIKeyString: OpenAPISchema]?
     public let responses: [OpenAPIKeyString: OpenAPIResponse]?
     public let parameters: [OpenAPIKeyString: OpenAPIParameter]?
@@ -115,7 +115,7 @@ public struct OpenAPIPathString: RegexableString {
     public var value: String
 }
 
-public struct OpenAPIPath: Content {
+public struct OpenAPIPath: Encodable {
     public let summary: String?
     public let description: String?
     public let get: OpenAPIOperation?
@@ -130,7 +130,7 @@ public struct OpenAPIPath: Content {
     public let parameters: [OpenAPIParameter]?
 }
 
-public struct OpenAPIOperation: Content {
+public struct OpenAPIOperation: Encodable {
     public let tags: [String]?
     public let summary: String?
     public let description: String?
@@ -145,33 +145,172 @@ public struct OpenAPIOperation: Content {
     public let servers: [OpenAPIServer]?
 }
 
-public struct OpenAPIExternalDocs: Content {
+public struct OpenAPIExternalDocs: Encodable {
     public let description: String?
     public let url: URL
 }
 
-public struct OpenAPIParameter: Content {
+public struct OpenAPIParameter: Encodable {
     public let name: String
     public let `in`: OpenAPIParameterLocation
     public let description: String?
     public private(set) var required: Bool; #warning(#"TODO: If the parameter location is "path", this property is REQUIRED and its value MUST be true. Otherwise, the property MAY be included and its default value is false."#)
     public let deprecated: Bool?
-    public let allowEmptyValue: Bool
+    public let allowEmptyValue: Bool?
+    public let style: OpenAPIParameterStyle?
+    public let explode: Bool?
+    public let allowReserved: Bool?
+    public let schema: OpenAPISchema?
+    public let example: Codable?
+    public let examples: [String: OpenAPIExample]?
+    public let Encodable: [String: OpenAPIMediaType]?
 }
 
-public enum OpenAPIParameterLocation: String, Content {
+public enum OpenAPIParameterStyle: String, Encodable {
+    case matrix, label, form, simple, spaceDelimited
+    case pipeDelimited, deepObject
+}
+
+public enum OpenAPIParameterLocation: String, Encodable {
     case query, header, path, cookie
 }
 
+public struct OpenAPIRequestBody: Encodable {
+    public let description: String?
+    public let Encodable: [String: OpenAPIMediaType]
+    public let requred: Bool?
+}
 
-public struct OpenAPISpec: Content {
+public struct OpenAPIMediaType: Encodable {
+    public let schema: OpenAPISchema?
+    public let example: Codable
+    public let examples: [String: OpenAPIExample]?
+    public let encoding: [String: OpenAPIEncoding]?
+}
+
+public struct OpenAPIEncoding: Encodable {
+    public let EncodableType: String?
+    public let headers: [HTTPHeaderName: HTTPHeaderValue]?
+    public let style: OpenAPIParameterStyle?
+    public let explode: Bool?
+    public let allowReserved: Bool?
+}
+
+public struct OpenAPIResponses: Encodable {
+    public let `default`: OpenAPIResponse?
+    public let codeMap: [HTTPStatusCodeString: OpenAPIResponse]?
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: StringCodingKey.self)
+        try container.encode(self.default, forKey: StringCodingKey(str: "default"))
+        try self.codeMap?.forEach { key, value in
+            try container.encode(value, forKey: StringCodingKey(str: key.value))
+        }
+    }
+    
+    public struct HTTPStatusCodeString: RegexableString {
+        static public var regex: String = #"[1-5](X{2}|[0-9]{2})"#
+        
+        public var value: String
+    }
+}
+
+
+private struct StringCodingKey: CodingKey {
+    init(str: String) {
+        self.init(stringValue: str)!
+    }
+    
+    var stringValue: String
+    
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+    }
+    
+    var intValue: Int?
+    
+    init?(intValue: Int) {
+        self.init(stringValue: "\(intValue)")
+    }
+}
+
+public struct OpenAPIResponse: Encodable {
+    public let description: String
+    public let headers: [HTTPHeaderName: HTTPHeaderValue]?
+    public let Encodable: [String: OpenAPIMediaType]?
+    public let links: [String: OpenAPILink]?
+}
+
+public struct OpenAPICallback: Encodable {
+    public let callbackMap: [String: OpenAPIPaths]?
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: StringCodingKey.self)
+        try self.callbackMap?.forEach { key, paths in
+            guard paths.pathMap.count == 1 else { return } // This is a little ugly
+            try container.encode(paths, forKey: StringCodingKey(str: key))
+        }
+    }
+}
+
+public struct OpenAPIPaths: Encodable {
+    internal let pathMap: [OpenAPIPathString: OpenAPIPath]
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: StringCodingKey.self)
+        try self.pathMap.forEach { (arg) in
+            let (key, value) = arg
+            try container.encode(value, forKey: StringCodingKey(str: key.value))
+        }
+    }
+}
+
+public protocol OpenAPIExample: Encodable { }
+
+public struct CodableOpenAPIExample<T: Encodable>: OpenAPIExample {
+    public let summary: String?
+    public let description: String?
+    public let value: T
+}
+
+public struct ExternalOpenAPIExample: OpenAPIExample {
+    public let summary: String?
+    public let description: String?
+    public let externalValue: URL
+}
+
+public struct OpenAPILink: Encodable {
+    public let operationRef: String?
+    public let operationId: String?
+    public let parameters: [String: String]?
+    public let requestBody: String?
+    public let description: String?
+    public let server: OpenAPIServer?
+}
+
+public struct OpenAPIHeader: Encodable {
+    
+}
+
+public struct OpenAPISpec: ResponseEncodable, Encodable {
+    public func encodeResponse(for req: HTTPRequest, using ctx: Context) -> EventLoopFuture<HTTPResponse> {
+        var res: HTTPResponse
+        do {
+            res = HTTPResponse()
+            try res.encode(self, as: .json)
+        } catch {
+            res = HTTPResponse(status: .internalServerError, version: .init(major: 1, minor: 1))
+        }
+        return ctx.eventLoop.makeSucceededFuture(res)
+    }
+    
     public let openapi: String = "3.0.0"
     
     public let info: OpenAPIInfo
     
     public let servers: [OpenAPIServer]
     
-    public let paths: [OpenAPIPathString: OpenAPIPath]
+    public let paths: OpenAPIPaths
     
     public let components: OpenAPIComponents?
     
