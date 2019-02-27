@@ -294,12 +294,11 @@ public struct OpenAPIHeader: Encodable {
 
 public struct OpenAPISpec: ResponseEncodable, Encodable {
     public func encodeResponse(for req: HTTPRequest, using ctx: Context) -> EventLoopFuture<HTTPResponse> {
-        var res: HTTPResponse
+        var res = HTTPResponse()
         do {
-            res = HTTPResponse()
             try res.encode(self, as: .json)
         } catch {
-            res = HTTPResponse(status: .internalServerError, version: .init(major: 1, minor: 1))
+            return ctx.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Failed to encode \(OpenAPISpec.self) to response"))
         }
         return ctx.eventLoop.makeSucceededFuture(res)
     }
