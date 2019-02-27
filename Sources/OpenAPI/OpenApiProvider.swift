@@ -1,6 +1,6 @@
 import Vapor
 
-public final class OpenApiProvider: Provider {
+public final class OpenAPIProvider: Provider {
     public func register(_ s: inout Services) throws {
         
     }
