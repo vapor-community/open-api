@@ -8,9 +8,10 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/vapor/vapor.git", .branch("master")),
+        .package(url: "https://github.com/vapor/codable-kit.git", .branch("master")),
     ],
     targets: [
-        .target(name: "OpenAPI", dependencies: ["Vapor"]),
+        .target(name: "OpenAPI", dependencies: ["Vapor", "CodableKit"]),
         .testTarget(name: "OpenAPITests", dependencies: ["OpenAPI"]),
     ]
 )
